@@ -26,6 +26,18 @@ pull_origin() {
     git pull origin $current_branch
 }
 
+update_dot_file() {
+    local current_path=$PWD
+    cd ~/code/personal/dot_file/
+    cp ~/.zshrc ~/code/personal/dot_file/
+    git add .
+    git commit -m 'updated zshrc'
+    git push
+    cd $current_path
+    source ~/.zshrc
+    echo "dot_file repo updated"
+}
+
 # NVM auto-switching
 autoload -U add-zsh-hook
 load_nvmrc() {
@@ -131,8 +143,8 @@ alias ezsh="code ~/.zshrc"
 # source zshrc file
 alias szsh="source ~/.zshrc"
 
-# push zsh file updates to chezmoi
-alias uzsh="chezmoi add ~/.zshrc && chezmoi git -- add dot_zshrc && chezmoi git -- commit -m 'Updated zsh dotfile' && chezmoi git -- push && echo 'dotfiles repo update complete'"
+# copy edits to dot_file repo and push
+alias uzsh="update_dot_file"
 
 # This loads nvm bash_completion
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
