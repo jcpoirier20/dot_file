@@ -35,7 +35,7 @@ update_dot_file() {
     git push
     cd $current_path
     source ~/.zshrc
-    echo "dot_file repo updated"
+    echo -e "\033[0;32m dot_file repo updated \033[0m"
 }
 
 # NVM auto-switching
