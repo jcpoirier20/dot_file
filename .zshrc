@@ -4,8 +4,10 @@ source ~/.antilles/sdk_env_vars.sh
 source ~/.pvt_env_vars
 source ~/.nvm/nvm.sh
 
-# sets VSCode as editor
 export EDITOR="code --wait --new-window"
+export PYENV_ROOT="$HOME/.pyenv"
+[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"
+eval "$(pyenv init -)"
 
 ##### HELPERS #####
 killPort() {
@@ -28,14 +30,68 @@ pull_origin() {
 
 update_dot_file() {
     local current_path=$PWD
-    cd ~/code/personal/dot_file/
-    cp ~/.zshrc ~/code/personal/dot_file/
+    cd ~/code/dot_file/
+    cp ~/.zshrc ~/code/dot_file/
     git add .
     git commit -m 'updated zshrc'
     git push
     cd $current_path
     source ~/.zshrc
     echo -e "\033[0;32m dot_file repo updated \033[0m"
+}
+
+# Link Tecton packages to NGAM
+voltron() {
+    echo -e "\033[0;32m READY TO FORM VOLTRON! \033[0m"
+    cd ~/code/tecton/packages/q2-tecton-sdk
+    yarn link
+    echo -e "\033[0;32m ACTIVATE INTERLOCKS! \033[0m"
+    cd ~/code/tecton/packages/q2-tecton-platform
+    yarn link
+    echo -e "\033[0;32m DYNATHERMS CONNECTED! \033[0m"
+    cd ~/code/ngam
+    yarn link q2-tecton-sdk
+    echo -e "\033[0;32m INFRA-CELLS UP! \033[0m"
+    yarn link q2-tecton-platform
+    echo -e "\033[0;32m MEGA-THRUSTERS ARE A GO! \033[0m"
+    cd ~/code/tecton
+    echo -e "\033[0;32m LET'S GO VOLTRON FORCE! \033[0m"
+    yblh
+}
+
+# Unlink Tecton packages from NGAM
+unlink() {
+    cd ~/code/ngam
+    yarn unlink q2-tecton-sdk
+    yarn unlink q2-tecton-platform
+    yarn nom
+    yarn install
+    cd ~/code/tecton/packages/q2-tecton-sdk
+    yarn unlink
+    cd ~/code/tecton/packages/q2-tecton-platform
+    yarn unlink
+    cdt
+}
+
+nginx_smart_start() {
+    cd ~/code/ngam
+    # Use ps to search for nginx master process and capture the output
+    # grep -v 'grep' excludes the grep process itself from results
+    nginx_process=$(ps aux | grep "nginx: master" | grep -v grep)
+
+    if [ -z "$nginx_process" ]; then
+        # If the $nginx_process string is empty (no nginx master found)
+        echo "Nginx is not running. Starting Nginx..."
+        sudo nginx
+        echo "\033[0;32m Nginx is now running. \033[0m"
+    else
+        # If we found a master process, reload the configuration
+        echo "Nginx is already running. Reloading configuration..."
+        sudo nginx -s reload
+        echo "\033[0;32m Nginx has reloaded. \033[0m"
+    fi
+
+    yarn start
 }
 
 # NVM auto-switching
@@ -81,64 +137,75 @@ alias gpo="pull_origin"
 alias grs="git reset --soft HEAD~1"
 
 
-##### OPEN REPOS IN VSCODE #####
+##### TECTON #####
+# navigate to tecton root
+alias cdt="cd ~/code/tecton"
+
 # opens Tecton in VSCode
 alias otct="cd ~/code/tecton && code ."
 
-# opens NGAM in VSCode
-alias ongam='cd ~/code/ngam && code .'
-
-# opens Tecton-Canary in VSCode
-alias ocnry="cd ~/code/tecton-canary && code ."
-
-# opens Antilles repo in VSCode
-alias oant="cd ~/code/antilles && code ."
-
-# opens SDK repo in VSCode
-alias osdk="cd ~/code/sdk && code ."
-
-
-##### LOCAL DEVELOPMENT #####
-# builds the Tecton dev server
+# builds the Tecton packages
 alias ybd="cd ~/code/tecton && yarn build:dev"
 
-# spins up a local dev server of Tecton
+# starts a local dev server of Tecton packages
 alias ybl="cd ~/code/tecton && yarn build:local"
 
-# spins up a local dev server of our documentation site
+# starts a local dev server of Tecton packages in HTTPS
+alias yblh="cd ~/code/tecton && yarn build:local:https"
+
+# starts a local dev server of the documentation site
 alias sdocs="cd ~/code/tecton/packages/docs && yarn clean && yarn start"
 
 # runs linter on tecton packages
 alias format="cd ~/code/tecton && yarn lint:fix"
 
-# spins up a testing server for Tecton elements
+# starts a testing server for Tecton elements
 alias stests="cd ~/code/tecton/packages/q2-tecton-elements && yarn test:dev"
 
-# runs the necessary scripts to start the SDK environment inside sdk folder
+# navigate to tecton-canary root
+alias cdcn="cd ~/code/tecton-canary"
+
+# opens Tecton-Canary in VSCode
+alias ocnry="cd ~/code/tecton-canary && code ."
+
+
+##### NGAM #####
+# navigate to ngam root
+alias cdng="cd ~/code/ngam"
+
+# opens NGAM in VSCode
+alias ongam='cd ~/code/ngam && code .'
+
+# starts the nginx server and builds ngam
+alias sngam="nginx_smart_start"
+
+# opens the nginx conf file for editing
+alias enginx="code /opt/homebrew/etc/nginx/nginx.conf"
+
+
+##### ANTILLES/SDK #####
+# opens Antilles repo in VSCode
+alias oant="cd ~/code/antilles && code ."
+
+# navigate to SDK root
+alias cdsdk="cd ~/code/sdk"
+
+# opens SDK repo in VSCode
+alias osdk="cd ~/code/sdk && code ."
+
+# runs the necessary scripts to start the SDK environment inside sdk repos
 alias ssdk="source ~/.antilles/sdk_env_vars.sh && source ~/.antilles/antilles_completion.zsh && source .env/bin/activate"
 
 # runs the review-buddy tool
 alias rb="cd ~/code/review-buddy && cargo run $1"
 
-# opens the nginx conf file to point to different stacks
-alias enginx="code /usr/local/etc/nginx/nginx.conf"
-
-# navigate to tecton root
-alias cdt="cd ~/code/tecton"
-
-# navigate to ngam root
-alias cdng="cd ~/code/ngam"
-
-# navigate to tecton-canary root
-alias cdcn="cd ~/code/tecton-canary"
-
-# navigate to sdk root
-alias cdsdk="cd ~/code/sdk"
-
 
 ##### OTHER #####
 # edit zshrc file
 alias ezsh="code ~/.zshrc"
+
+# edit pvt_env_vars file
+alias epvt="code ~/.pvt_env_vars"
 
 # source zshrc file
 alias szsh="source ~/.zshrc"
