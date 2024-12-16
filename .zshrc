@@ -184,6 +184,9 @@ alias enginx="code /opt/homebrew/etc/nginx/nginx.conf"
 
 
 ##### ANTILLES/SDK #####
+# navigate to Antilles root
+alias cdant="cd ~/code/antilles"
+
 # opens Antilles repo in VSCode
 alias oant="cd ~/code/antilles && code ."
 
