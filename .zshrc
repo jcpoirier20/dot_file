@@ -10,8 +10,18 @@ export PYENV_ROOT="$HOME/.pyenv"
 eval "$(pyenv init -)"
 
 ##### HELPERS #####
-killPort() {
+killport() {
     lsof -ti:$1 | xargs kill
+}
+
+enable_tunnel() {
+    ssh -D 1337 -f -q -N jb
+    echo 'Tunnel Enabled on port 1337'
+}
+
+disable_tunnel() {
+    lsof -i :1337 | grep -o '\d+' | head -1 | xargs kill
+    echo 'Tunnel Ended'
 }
 
 parse_git_branch() {
@@ -204,6 +214,12 @@ alias rb="cd ~/code/review-buddy && cargo run $1"
 
 
 ##### OTHER #####
+# move to DPPython project
+alias cddp="cd ~/code/personal/DPPython"
+
+# load main.py into wokwi simulator
+alias wokwi="python -m mpremote connect port:rfc2217://localhost:4000 run main.py"
+
 # edit zshrc file
 alias ezsh="code ~/.zshrc"
 
@@ -221,3 +237,4 @@ alias uzsh="update_dot_file"
 
 add-zsh-hook chpwd load_nvmrc
 load_nvmrc
+export PATH="/Users/jpoirier/bin:$PATH"
