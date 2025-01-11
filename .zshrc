@@ -66,7 +66,7 @@ voltron() {
     echo -e "\033[0;32m MEGA-THRUSTERS ARE A GO! \033[0m"
     cd ~/code/tecton
     echo -e "\033[0;32m LET'S GO VOLTRON FORCE! \033[0m"
-    yblh
+    yarn build:local:https
 }
 
 # Unlink Tecton packages from NGAM
@@ -98,7 +98,7 @@ nginx_smart_start() {
         # If we found a master process, reload the configuration
         echo "Nginx is already running. Reloading configuration..."
         sudo nginx -s reload
-        echo "\033[0;32m Nginx has reloaded. \033[0m"
+        echo "\033[0;32m Nginx configuration has reloaded. Starting Nginx... \033[0m"
     fi
 
     yarn start
