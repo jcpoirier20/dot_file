@@ -2,12 +2,13 @@
 
 source ~/.antilles/sdk_env_vars.sh
 source ~/.pvt_env_vars
-source ~/.nvm/nvm.sh
+eval "$(pyenv init -)"
 
+export PATH="/Users/jpoirier/bin:$PATH"
 export EDITOR="code --wait --new-window"
 export PYENV_ROOT="$HOME/.pyenv"
 [[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"
-eval "$(pyenv init -)"
+export NVM_DIR="$HOME/.nvm"
 
 ##### HELPERS #####
 killport() {
@@ -28,24 +29,29 @@ parse_git_branch() {
     git branch 2> /dev/null | sed -n -e 's/^\* \(.*\)/\1/p'
 }
 
-set_upstream() {
+gpu() {
     local current_branch=$(parse_git_branch)
     git push --set-upstream origin $current_branch
 }
 
-pull_origin() {
+gpo() {
     local current_branch=$(parse_git_branch)
     git pull origin $current_branch
 }
 
+apply_styleguide() {
+    pushd ~/code/tecton/packages/q2-tecton-elements >/dev/null
+    yarn style:fix
+    popd >/dev/null
+}
+
 update_dot_file() {
-    local current_path=$PWD
-    cd ~/code/dot_file/
+    pushd ~/code/dot_file/ >/dev/null
     cp ~/.zshrc ~/code/dot_file/
     git add .
     git commit -m 'updated zshrc'
     git push
-    cd $current_path
+    popd >/dev/null
     source ~/.zshrc
     echo -e "\033[0;32m dot_file repo updated \033[0m"
 }
@@ -53,34 +59,46 @@ update_dot_file() {
 # Link Tecton packages to NGAM
 voltron() {
     echo -e "\033[0;32m READY TO FORM VOLTRON! \033[0m"
-    cd ~/code/tecton/packages/q2-tecton-sdk
+    pushd ~/code/tecton/packages/q2-tecton-sdk >/dev/null
     yarn link
+    popd >/dev/null
     echo -e "\033[0;32m ACTIVATE INTERLOCKS! \033[0m"
-    cd ~/code/tecton/packages/q2-tecton-platform
+
+    pushd ~/code/tecton/packages/q2-tecton-platform >/dev/null
     yarn link
+    popd >/dev/null
     echo -e "\033[0;32m DYNATHERMS CONNECTED! \033[0m"
-    cd ~/code/ngam
+
+    pushd ~/code/ngam >/dev/null
     yarn link q2-tecton-sdk
     echo -e "\033[0;32m INFRA-CELLS UP! \033[0m"
     yarn link q2-tecton-platform
     echo -e "\033[0;32m MEGA-THRUSTERS ARE A GO! \033[0m"
-    cd ~/code/tecton
+    popd >/dev/null
+
+    pushd ~/code/tecton >/dev/null
     echo -e "\033[0;32m LET'S GO VOLTRON FORCE! \033[0m"
     yarn build:local:https
 }
 
 # Unlink Tecton packages from NGAM
 unlink() {
-    cd ~/code/ngam
+    # Unlink Tecton packages
+    pushd ~/code/tecton/packages/q2-tecton-sdk >/dev/null
+    yarn unlink
+    popd >/dev/null
+    pushd ~/code/tecton/packages/q2-tecton-platform >/dev/null
+    yarn unlink
+    popd >/dev/null
+    # Unlink in NGAM and reinstall dependencies
+    pushd ~/code/ngam >/dev/null
     yarn unlink q2-tecton-sdk
     yarn unlink q2-tecton-platform
+    echo -e "\033[0;32m Clean Installing NGAM dependencies... \033[0m"
     yarn nom
     yarn install
-    cd ~/code/tecton/packages/q2-tecton-sdk
-    yarn unlink
-    cd ~/code/tecton/packages/q2-tecton-platform
-    yarn unlink
-    cdt
+    popd >/dev/null
+    cd ~/code/tecton
 }
 
 nginx_smart_start() {
@@ -104,24 +122,30 @@ nginx_smart_start() {
     yarn start
 }
 
-# NVM auto-switching
 autoload -U add-zsh-hook
 load_nvmrc() {
-  local node_version="$(nvm version)"
-  local nvmrc_path="$(nvm_find_nvmrc)"
+    local dir="$(pwd -P)"
+    
+    # Keep going up directories until we hit root
+    while [[ "$dir" != "/" ]]; do
+        if [[ -f "$dir/.nvmrc" ]]; then
+            # Load nvm if it hasn't been loaded yet
+            if ! type nvm >/dev/null 2>&1; then
+                [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
+            fi
+            
+            local node_version="$(nvm version)"
+            local nvmrc_node_version=$(nvm version "$(cat "$dir/.nvmrc")")
 
-  if [ -n "$nvmrc_path" ]; then
-    local nvmrc_node_version=$(nvm version "$(cat "${nvmrc_path}")")
-
-    if [ "$nvmrc_node_version" = "N/A" ]; then
-      nvm install
-    elif [ "$nvmrc_node_version" != "$node_version" ]; then
-      nvm use
-    fi
-  elif [ "$node_version" != "$(nvm version default)" ]; then
-    echo "Reverting to nvm default version"
-    nvm use default
-  fi
+            if [ "$nvmrc_node_version" = "N/A" ]; then
+                nvm install
+            elif [ "$nvmrc_node_version" != "$node_version" ]; then
+                nvm use
+            fi
+            return
+        fi
+        dir="$(dirname "$dir")"
+    done
 }
 
 ##### GIT SHORTCUTS #####
@@ -134,14 +158,8 @@ alias gc="git checkout $1"
 # amend no edit commits
 alias gca="git commit --amend --no-edit"
 
-# pushes upstream origin with current branch name
-alias gpu="set_upstream"
-
 # force pushe changes
 alias gpf="git push -f"
-
-# pull origin
-alias gpo="pull_origin"
 
 # reset back one commit
 alias grs="git reset --soft HEAD~1"
@@ -172,6 +190,8 @@ alias format="cd ~/code/tecton && yarn lint:fix"
 # starts a testing server for Tecton elements
 alias stests="cd ~/code/tecton/packages/q2-tecton-elements && yarn test:dev"
 
+alias styleguide="apply_styleguide"
+
 # navigate to tecton-canary root
 alias cdcn="cd ~/code/tecton-canary"
 
@@ -187,7 +207,7 @@ alias cdng="cd ~/code/ngam"
 alias ongam='cd ~/code/ngam && code .'
 
 # starts the nginx server and builds ngam
-alias sngam="nginx_smart_start"
+alias snginx="nginx_smart_start"
 
 # opens the nginx conf file for editing
 alias enginx="code /opt/homebrew/etc/nginx/nginx.conf"
@@ -232,9 +252,8 @@ alias szsh="source ~/.zshrc"
 # copy edits to dot_file repo and push
 alias uzsh="update_dot_file"
 
-# This loads nvm bash_completion
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
-
+# Run when changing directories
 add-zsh-hook chpwd load_nvmrc
+
+# Run on initial shell start if we're in a directory with .nvmrc
 load_nvmrc
-export PATH="/Users/jpoirier/bin:$PATH"
