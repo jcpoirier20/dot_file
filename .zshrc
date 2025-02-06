@@ -1,25 +1,51 @@
 #!/bin/sh
-
-source ~/.antilles/sdk_env_vars.sh
 source ~/.pvt_env_vars
-eval "$(pyenv init -)"
 
 export PATH="/Users/jpoirier/bin:$PATH"
 export EDITOR="code --wait --new-window"
 export PYENV_ROOT="$HOME/.pyenv"
 [[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"
 export NVM_DIR="$HOME/.nvm"
+CHECK_ICON="\xE2\x9C\x94"
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+NC='\033[0m'
+
+autoload -U add-zsh-hook
+
+
+##### PYTHON HELPERS ##### 
+for cmd in pyenv python python3 pip pip3; do
+    eval "function $cmd() {
+        unset -f pyenv python pip python3 pip3
+        eval \"\$(command pyenv init -)\"
+        $cmd \"\$@\"
+    }"
+done
+
+# Check for .python-version files
+load_pyenv() {
+    local dir="$(pwd -P)"
+    
+    while [[ "$dir" != "/" ]]; do
+        if [[ -f "$dir/.python-version" ]]; then
+            unset -f pyenv python pip python3 pip3
+            eval "$(command pyenv init -)"
+            return
+        fi
+        dir="$(dirname "$dir")"
+    done
+}
+
 
 ##### HELPERS #####
-killport() {
-    lsof -ti:$1 | xargs kill
-}
 
+# Enable SSH tunnel to JB
 enable_tunnel() {
     ssh -D 1337 -f -q -N jb
-    echo 'Tunnel Enabled on port 1337'
+    echo "${GREEN}${CHECK_ICON} Tunnel Enabled on port 1337 ${NC}"
 }
-
+# Disable SSH tunnel to JB
 disable_tunnel() {
     lsof -i :1337 | grep -o '\d+' | head -1 | xargs kill
     echo 'Tunnel Ended'
@@ -30,8 +56,15 @@ parse_git_branch() {
 }
 
 gpu() {
-    local current_branch=$(parse_git_branch)
-    git push --set-upstream origin $current_branch
+   local current_branch=$(parse_git_branch)
+   
+   if [[ $current_branch =~ ^[a-z]+/[A-Z]+-[0-9]+$ ]] ||
+      [[ $current_branch =~ ^release/[0-9]+\.[0-9]+\.?[0-9]*[x]?$ ]]; then
+       git push --set-upstream origin $current_branch
+   else
+       echo "Warning: Branch '$current_branch' doesn't match standard patterns."
+       echo "Manually push with git push --set-upstream origin $current_branch"
+   fi
 }
 
 gpo() {
@@ -45,6 +78,21 @@ apply_styleguide() {
     popd >/dev/null
 }
 
+# starts the Tecton test suite
+stests() {
+    pushd ~/code/tecton/packages/q2-tecton-elements >/dev/null
+    yarn test:dev --silent
+    popd >/dev/null
+}
+
+# starts the Tecton docs server
+sdocs() {
+    pushd ~/code/tecton/packages/docs >/dev/null
+    yarn clean
+    yarn start
+    popd >/dev/null
+}
+
 update_dot_file() {
     pushd ~/code/dot_file/ >/dev/null
     cp ~/.zshrc ~/code/dot_file/
@@ -53,31 +101,31 @@ update_dot_file() {
     git push
     popd >/dev/null
     source ~/.zshrc
-    echo -e "\033[0;32m dot_file repo updated \033[0m"
+    echo -e "${GREEN}${CHECK_ICON} dot_file repo updated ${NC}"
 }
 
 # Link Tecton packages to NGAM
 voltron() {
-    echo -e "\033[0;32m READY TO FORM VOLTRON! \033[0m"
+    echo -e "${GREEN}${CHECK_ICON} READY TO FORM VOLTRON! ${NC}"
     pushd ~/code/tecton/packages/q2-tecton-sdk >/dev/null
     yarn link
     popd >/dev/null
-    echo -e "\033[0;32m ACTIVATE INTERLOCKS! \033[0m"
+    echo -e "${GREEN}${CHECK_ICON} ACTIVATE INTERLOCKS! ${NC}"
 
     pushd ~/code/tecton/packages/q2-tecton-platform >/dev/null
     yarn link
     popd >/dev/null
-    echo -e "\033[0;32m DYNATHERMS CONNECTED! \033[0m"
+    echo -e "${GREEN}${CHECK_ICON} DYNATHERMS CONNECTED! ${NC}"
 
     pushd ~/code/ngam >/dev/null
     yarn link q2-tecton-sdk
-    echo -e "\033[0;32m INFRA-CELLS UP! \033[0m"
+    echo -e "${GREEN}${CHECK_ICON} INFRA-CELLS UP! ${NC}"
     yarn link q2-tecton-platform
-    echo -e "\033[0;32m MEGA-THRUSTERS ARE A GO! \033[0m"
+    echo -e "${GREEN}${CHECK_ICON} MEGA-THRUSTERS ARE A GO! ${NC}"
     popd >/dev/null
 
-    pushd ~/code/tecton >/dev/null
-    echo -e "\033[0;32m LET'S GO VOLTRON FORCE! \033[0m"
+    cd ~/code/tecton
+    echo -e "${GREEN}${CHECK_ICON} LET'S GO VOLTRON FORCE! ${NC}"
     yarn build:local:https
 }
 
@@ -94,12 +142,14 @@ unlink() {
     pushd ~/code/ngam >/dev/null
     yarn unlink q2-tecton-sdk
     yarn unlink q2-tecton-platform
-    echo -e "\033[0;32m Clean Installing NGAM dependencies... \033[0m"
+    echo -e "${GREEN} Clean Installing NGAM dependencies... ${NC}"
     yarn nom
     yarn install
     popd >/dev/null
     cd ~/code/tecton
 }
+
+
 
 nginx_smart_start() {
     cd ~/code/ngam
@@ -109,24 +159,23 @@ nginx_smart_start() {
 
     if [ -z "$nginx_process" ]; then
         # If the $nginx_process string is empty (no nginx master found)
-        echo "Nginx is not running. Starting Nginx..."
+        echo "${YELLOW} Nginx is not running. Starting Nginx... ${NC}"
         sudo nginx
-        echo "\033[0;32m Nginx is now running. \033[0m"
+        echo "${GREEN}${CHECK_ICON} Nginx is now running. ${NC}"
     else
         # If we found a master process, reload the configuration
-        echo "Nginx is already running. Reloading configuration..."
+        echo "${YELLOW} Nginx is already running. Reloading configuration... ${NC}"
         sudo nginx -s reload
-        echo "\033[0;32m Nginx configuration has reloaded. Starting Nginx... \033[0m"
+        echo "${GREEN}${CHECK_ICON} Nginx configuration has reloaded. Starting Nginx... ${NC}"
     fi
 
     yarn start
 }
 
-autoload -U add-zsh-hook
 load_nvmrc() {
     local dir="$(pwd -P)"
     
-    # Keep going up directories until we hit root
+    # look for nvmrc file going up directories until we hit root
     while [[ "$dir" != "/" ]]; do
         if [[ -f "$dir/.nvmrc" ]]; then
             # Load nvm if it hasn't been loaded yet
@@ -135,7 +184,7 @@ load_nvmrc() {
             fi
             
             local node_version="$(nvm version)"
-            local nvmrc_node_version=$(nvm version "$(cat "$dir/.nvmrc")")
+            local nvmrc_node_version=$(nvm version < "$dir/.nvmrc")
 
             if [ "$nvmrc_node_version" = "N/A" ]; then
                 nvm install
@@ -158,7 +207,7 @@ alias gc="git checkout $1"
 # amend no edit commits
 alias gca="git commit --amend --no-edit"
 
-# force pushe changes
+# force push changes
 alias gpf="git push -f"
 
 # reset back one commit
@@ -181,14 +230,8 @@ alias ybl="cd ~/code/tecton && yarn build:local"
 # starts a local dev server of Tecton packages in HTTPS
 alias yblh="cd ~/code/tecton && yarn build:local:https"
 
-# starts a local dev server of the documentation site
-alias sdocs="cd ~/code/tecton/packages/docs && yarn clean && yarn start"
-
 # runs linter on tecton packages
 alias format="cd ~/code/tecton && yarn lint:fix"
-
-# starts a testing server for Tecton elements
-alias stests="cd ~/code/tecton/packages/q2-tecton-elements && yarn test:dev"
 
 alias styleguide="apply_styleguide"
 
@@ -229,6 +272,9 @@ alias osdk="cd ~/code/sdk && code ."
 # runs the necessary scripts to start the SDK environment inside sdk repos
 alias ssdk="source ~/.antilles/sdk_env_vars.sh && source ~/.antilles/antilles_completion.zsh && source .env/bin/activate"
 
+# runs the necessary scripts to start the Antilles environment inside antilles repos
+alias sant="source ~/.antilles/sdk_env_vars.sh && source ~/.antilles/antilles_completion.zsh && source ~/code/antilles/.venv/bin/activate"
+
 # runs the review-buddy tool
 alias rb="cd ~/code/review-buddy && cargo run $1"
 
@@ -254,6 +300,6 @@ alias uzsh="update_dot_file"
 
 # Run when changing directories
 add-zsh-hook chpwd load_nvmrc
-
-# Run on initial shell start if we're in a directory with .nvmrc
 load_nvmrc
+add-zsh-hook chpwd load_pyenv
+load_pyenv
