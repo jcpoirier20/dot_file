@@ -104,7 +104,6 @@ update_dot_file() {
     git add .
     git commit -m 'updated zshrc'
     git push
-    popd >/dev/null
     source ~/.zshrc
     echo -e "${GREEN}${CHECK_ICON} dot_file repo updated ${NC}"
 }
@@ -152,8 +151,6 @@ unlink() {
     echo -e "${GREEN} Clean Installing NGAM dependencies... ${NC}"
     yarn nom
     yarn install
-    popd >/dev/null
-    cd ~/code/tecton
 }
 
 
