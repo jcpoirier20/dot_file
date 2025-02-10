@@ -74,27 +74,32 @@ gpo() {
 
 apply_styleguide() {
     pushd ~/code/tecton/packages/q2-tecton-elements >/dev/null
+    trap 'popd >/dev/null; trap - INT' EXIT INT
     yarn style:fix
-    popd >/dev/null
 }
 
 # starts the Tecton test suite
 stests() {
     pushd ~/code/tecton/packages/q2-tecton-elements >/dev/null
-    yarn test:dev --silent
-    popd >/dev/null
+    trap 'popd >/dev/null; trap - INT' EXIT INT
+    if [[ "$1" == "-v" ]]; then
+        yarn test:dev
+    else
+        yarn test:dev --silent
+    fi
 }
 
 # starts the Tecton docs server
 sdocs() {
     pushd ~/code/tecton/packages/docs >/dev/null
+    trap 'popd >/dev/null; trap - INT' EXIT INT
     yarn clean
     yarn start
-    popd >/dev/null
 }
 
 update_dot_file() {
     pushd ~/code/dot_file/ >/dev/null
+    trap 'popd >/dev/null; trap - INT' EXIT INT
     cp ~/.zshrc ~/code/dot_file/
     git add .
     git commit -m 'updated zshrc'
@@ -106,8 +111,9 @@ update_dot_file() {
 
 # Link Tecton packages to NGAM
 voltron() {
-    echo -e "${GREEN}${CHECK_ICON} READY TO FORM VOLTRON! ${NC}"
     pushd ~/code/tecton/packages/q2-tecton-sdk >/dev/null
+    trap 'popd >/dev/null 2>&1; cd ~/code/tecton; trap - INT' EXIT INT
+    echo -e "${GREEN}${CHECK_ICON} READY TO FORM VOLTRON! ${NC}"
     yarn link
     popd >/dev/null
     echo -e "${GREEN}${CHECK_ICON} ACTIVATE INTERLOCKS! ${NC}"
@@ -131,8 +137,9 @@ voltron() {
 
 # Unlink Tecton packages from NGAM
 unlink() {
-    # Unlink Tecton packages
     pushd ~/code/tecton/packages/q2-tecton-sdk >/dev/null
+    trap 'popd >/dev/null 2>&1; cd ~/code/tecton; trap - INT' EXIT INT
+    # Unlink Tecton packages
     yarn unlink
     popd >/dev/null
     pushd ~/code/tecton/packages/q2-tecton-platform >/dev/null
@@ -175,7 +182,7 @@ nginx_smart_start() {
 load_nvmrc() {
     local dir="$(pwd -P)"
     
-    # look for nvmrc file going up directories until we hit root
+    # look for nvmrc file going up directories until root
     while [[ "$dir" != "/" ]]; do
         if [[ -f "$dir/.nvmrc" ]]; then
             # Load nvm if it hasn't been loaded yet
@@ -280,12 +287,6 @@ alias rb="cd ~/code/review-buddy && cargo run $1"
 
 
 ##### OTHER #####
-# move to DPPython project
-alias cddp="cd ~/code/personal/DPPython"
-
-# load main.py into wokwi simulator
-alias wokwi="python -m mpremote connect port:rfc2217://localhost:4000 run main.py"
-
 # edit zshrc file
 alias ezsh="code ~/.zshrc"
 
