@@ -73,9 +73,28 @@ gpo() {
 }
 
 apply_styleguide() {
+    local file="$1"
+    
+    # If no argument provided, run the original command
+    if [[ -z "$file" ]]; then
+        pushd ~/code/tecton/packages/q2-tecton-elements >/dev/null
+        trap 'popd >/dev/null; trap - INT' EXIT INT
+        yarn style:fix
+        return
+    fi
+    
+    # Validate filename pattern
+    if [[ ! "$file" =~ ^q2-.+\.tsx$ ]]; then
+        echo "Error: Filename must start with 'q2-' and end with '.tsx'"
+        return 1
+    fi
+    
+    # Extract filename without extension
+    local basename="${file%.tsx}"
+    
     pushd ~/code/tecton/packages/q2-tecton-elements >/dev/null
     trap 'popd >/dev/null; trap - INT' EXIT INT
-    yarn style:fix
+    yarn style:fix --path "src/components/${basename}/${file}"
 }
 
 # starts the Tecton test suite
