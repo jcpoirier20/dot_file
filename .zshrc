@@ -172,7 +172,28 @@ unlink() {
     yarn install
 }
 
-
+safe-rm() {
+    if ! command -v trash &> /dev/null; then
+    echo "Warning: 'trash' command not found. Please install it with 'brew install trash'"
+    exit 1
+    fi
+    # Extract all arguments that aren't flags (starting with -)
+    local files=()
+    for arg in "$@"; do
+        if [[ ! "$arg" =~ ^- ]]; then
+            files+=("$arg")
+        fi
+    done
+    
+    # If we have files to delete, use trash command
+    if (( ${#files[@]} > 0 )); then
+        echo "🗑️  Sending to Trash instead of permanent deletion"
+        trash "${files[@]}"
+    else
+        # No files specified, show trash usage
+        command trash --help
+    fi
+}
 
 nginx_smart_start() {
     cd ~/code/ngam
@@ -206,13 +227,15 @@ load_nvmrc() {
                 [ -s "$NVM_DIR/nvm.sh" ] && source "$NVM_DIR/nvm.sh"
             fi
             
-            local node_version="$(nvm version)"
-            local nvmrc_node_version=$(nvm version < "$dir/.nvmrc")
-
+            local node_version="$(nvm version | sed 's/^v//')"  # Strip the "v"
+            local node_major_version="${node_version%%.*}"  # Extract the major version
+            local nvmrc_node_version=$(cat "$dir/.nvmrc" | sed 's/^v//')  # Read the .nvmrc file and strip the "v"
+            local nvmrc_node_major_version="${nvmrc_node_version%%.*}"  # Extract the major version
             if [ "$nvmrc_node_version" = "N/A" ]; then
                 nvm install
-            elif [ "$nvmrc_node_version" != "$node_version" ]; then
-                nvm use
+            elif [ "$nvmrc_node_major_version" != "$node_major_version" ]; then
+                echo "Switching to Node.js version $nvmrc_node_version"
+                nvm use "$nvmrc_node_version"
             fi
             return
         fi
@@ -303,6 +326,8 @@ alias rb="cd ~/code/review-buddy && cargo run $1"
 
 
 ##### OTHER #####
+# intercept rm commands to use trash from homebrew
+alias rm="safe-rm"
 # edit zshrc file
 alias ezsh="code ~/.zshrc"
 
