@@ -1,5 +1,9 @@
 #!/bin/sh
 source ~/.pvt_env_vars
+source "$HOME/.cargo/env"
+autoload -U compinit
+compinit
+source <(jj util completion zsh)
 
 export PATH="/Users/jpoirier/bin:$PATH"
 export EDITOR="code --wait --new-window"
@@ -47,7 +51,7 @@ enable_tunnel() {
 }
 # Disable SSH tunnel to JB
 disable_tunnel() {
-    lsof -i :1337 | grep -o '\d+' | head -1 | xargs kill
+    lsof -ti :1337 | xargs kill
     echo 'Tunnel Ended'
 }
 
@@ -127,7 +131,97 @@ update_dot_file() {
     echo -e "${GREEN}${CHECK_ICON} dot_file repo updated ${NC}"
 }
 
-# Link Tecton packages to NGAM
+link_tecton_sdk(){
+    local command="$1"
+    
+    # Validate that a command was provided
+    if [[ -z "$command" ]]; then
+        echo -e "${YELLOW} ❌ No command specified. Use sdklink or sdkunlink aliases. ${NC}"
+        return 1
+    fi
+    
+    # Validate command
+    if [[ "$command" != "link" && "$command" != "unlink" ]]; then
+        echo -e "${YELLOW} ❌ Invalid command: $command. Use 'link' or 'unlink'. ${NC}"
+        return 1
+    fi
+    
+    # Set up variables based on command
+    local action_verb action_past_tense yarn_command
+    if [[ "$command" == "link" ]]; then
+        action_verb="Linking"
+        action_past_tense="linked"
+        yarn_command="yarn link q2-tecton-sdk"
+    else
+        action_verb="Unlinking"
+        action_past_tense="unlinked"
+        yarn_command="yarn unlink q2-tecton-sdk"
+    fi
+    
+    echo -e "${GREEN}${CHECK_ICON} Starting SDK ${command}ing process... ${NC}"
+    
+    # Change to the SDK directory
+    if ! pushd ~/code/sdk >/dev/null 2>&1; then
+        echo -e "${YELLOW} ❌ Error: Could not find ~/code/sdk directory ${NC}"
+        return 1
+    fi
+    
+    # Set up trap to ensure we always return to original directory
+    trap 'popd >/dev/null 2>&1; trap - INT' EXIT INT
+    
+    echo -e "${GREEN}${CHECK_ICON} Searching for projects with frontend folders... ${NC}"
+    
+    local processed_count=0
+    
+    # Iterate through all directories in the current location
+    for dir in */; do
+        # Remove trailing slash from directory name
+        dir_name="${dir%/}"
+        
+        # Skip if not a directory
+        if [[ ! -d "$dir_name" ]]; then
+            continue
+        fi
+        
+        # Check if this directory has a frontend folder
+        if [[ -d "$dir_name/frontend" ]]; then
+            echo -e "${YELLOW} Found frontend in: $dir_name ${NC}"
+            
+            # Check if frontend directory has a package.json file
+            if [[ ! -f "$dir_name/frontend/package.json" ]]; then
+                echo -e "${YELLOW}   ❌ No package.json found in $dir_name/frontend, skipping... ${NC}"
+                continue
+            fi
+            
+            # Change to the frontend directory and run yarn command
+            if pushd "$dir_name/frontend" >/dev/null 2>&1; then
+                echo -e "${GREEN}   ${action_verb} q2-tecton-sdk in $dir_name/frontend... ${NC}"
+                
+                if eval "$yarn_command" 2>/dev/null; then
+                    echo -e "${GREEN}   ${CHECK_ICON} Successfully ${action_past_tense} q2-tecton-sdk ${NC}"
+                    ((processed_count++))
+                else
+                    echo -e "${YELLOW}   ❌ Failed to ${command} q2-tecton-sdk in $dir_name/frontend ${NC}"
+                fi
+                
+                # Return to the SDK root directory
+                popd >/dev/null
+            else
+                echo -e "${YELLOW}   ❌ Could not access $dir_name/frontend directory ${NC}"
+            fi
+        fi
+    done
+    
+    if [[ $processed_count -eq 0 ]]; then
+        echo -e "${YELLOW} No projects with frontend folders found to ${command} ${NC}"
+    else
+        # Capitalize first letter of action_past_tense (zsh compatible)
+        local capitalized_action="${(C)action_past_tense}"
+        echo -e "${GREEN}${CHECK_ICON} SDK ${command}ing completed! ${capitalized_action} q2-tecton-sdk to $processed_count project(s) ${NC}"
+    fi
+}
+
+# Link Tecton packages to NGAM and start Tecton local server in HTTPS
 voltron() {
     pushd ~/code/tecton/packages/q2-tecton-sdk >/dev/null
     trap 'popd >/dev/null 2>&1; cd ~/code/tecton; trap - INT' EXIT INT
@@ -141,7 +235,7 @@ voltron() {
     popd >/dev/null
     echo -e "${GREEN}${CHECK_ICON} DYNATHERMS CONNECTED! ${NC}"
 
-    pushd ~/code/ngam >/dev/null
+    pushd ~/code/ngam/packages/q2-uux >/dev/null
     yarn link q2-tecton-sdk
     echo -e "${GREEN}${CHECK_ICON} INFRA-CELLS UP! ${NC}"
     yarn link q2-tecton-platform
@@ -149,11 +243,21 @@ voltron() {
     popd >/dev/null
 
     cd ~/code/tecton
+    # Check for SSL certificates and copy over if necessary
+    if [[ ! -f "localhost.crt" ]] || [[ ! -f "localhost.key" ]]; then
+        echo -e "${YELLOW} SSL certificates not found in $(pwd). Attempting to copy from home directory... ${NC}"
+        if [[ -f ~/localhost.crt ]] && [[ -f ~/localhost.key ]]; then
+            cp ~/localhost.{crt,key} .
+            echo -e "${GREEN}${CHECK_ICON} SSL certificates copied successfully. ${NC}"
+        else
+            echo -e "${YELLOW} Warning: SSL certificates not found in home directory. HTTPS may not work correctly. ${NC}"
+        fi
+    fi
     echo -e "${GREEN}${CHECK_ICON} LET'S GO VOLTRON FORCE! ${NC}"
     yarn build:local:https
 }
 
-# Unlink Tecton packages from NGAM
+# Unlink Tecton packages from NGAM and reinstall base dependencies
 unlink() {
     pushd ~/code/tecton/packages/q2-tecton-sdk >/dev/null
     trap 'popd >/dev/null 2>&1; cd ~/code/tecton; trap - INT' EXIT INT
@@ -164,7 +268,7 @@ unlink() {
     yarn unlink
     popd >/dev/null
     # Unlink in NGAM and reinstall dependencies
-    pushd ~/code/ngam >/dev/null
+    pushd ~/code/ngam/packages/q2-uux >/dev/null
     yarn unlink q2-tecton-sdk
     yarn unlink q2-tecton-platform
     echo -e "${GREEN} Clean Installing NGAM dependencies... ${NC}"
@@ -207,13 +311,51 @@ nginx_smart_start() {
         sudo nginx
         echo "${GREEN}${CHECK_ICON} Nginx is now running. ${NC}"
     else
-        # If we found a master process, reload the configuration
-        echo "${YELLOW} Nginx is already running. Reloading configuration... ${NC}"
-        sudo nginx -s reload
-        echo "${GREEN}${CHECK_ICON} Nginx configuration has reloaded. Starting Nginx... ${NC}"
+        # If we found a master process, ask if user wants to reload
+        echo "${YELLOW} Nginx is already running. Reload nginx config? (y/N): ${NC}"
+        read -r reload_choice
+        # Default to 'N' if no input provided
+        reload_choice=${reload_choice:-N}
+        if [[ "$reload_choice" =~ ^[Yy]$ ]]; then
+            echo "${YELLOW} Enter password to reload nginx config... ${NC}"
+            sudo nginx -s reload
+            echo "${GREEN}${CHECK_ICON} Nginx config reloaded. ${NC}"
+        else
+            echo "${GREEN}${CHECK_ICON} Skipping nginx reload. ${NC}"
+        fi
     fi
-
+    echo "${GREEN}${CHECK_ICON} Starting the NGAM local server... ${NC}"
     yarn start
+}
+
+link_antilles() {
+    cd ~/code/sdk
+    ssdk
+    pip install -U -e ~/code/antilles/sdk
+     # Check if q2-sdk is installed and where it's installed from
+    local q2_sdk_info=$(pip show q2-sdk 2>/dev/null)
+    
+    if [[ -z "$q2_sdk_info" ]]; then
+        echo "${YELLOW} ❌ q2-sdk is not installed in the repo. Be sure you ran 'pip install -r requirements.txt' ${NC}"
+        return 1
+    fi
+    
+    # Extract the location from pip show output
+    local editable_project=$(echo "$q2_sdk_info" | grep "Editable project location:" | cut -d' ' -f4)
+    
+    if [[ -n "$editable_project" ]]; then
+        # Check if it points to our local antilles/sdk
+        if [[ "$editable_project" == *"/code/antilles/sdk"* ]]; then
+            echo "${GREEN}${CHECK_ICON} Antilles is correctly linked for local SDK development! ${NC}"
+        else
+            echo "${YELLOW} ❌ Unexpected location for local Antilles repo: $editable_project ${NC}"
+            echo "${YELLOW}   Expected: */code/antilles/sdk ${NC}"
+            return 1
+        fi
+    else
+        echo "${YELLOW} ❌ Antilles is not linked for local development ${NC}"
+        return 1
+    fi
 }
 
 load_nvmrc() {
@@ -241,6 +383,116 @@ load_nvmrc() {
         fi
         dir="$(dirname "$dir")"
     done
+}
+
+get_remote_branches() {
+    git fetch --prune
+    # Get the list of remote branches and their authors
+    git for-each-ref --format="%(authorname) %(refname:short)" refs/remotes/origin | \
+    awk '{
+        author = "";
+        branch = $NF;
+        for (i=1; i<NF; i++) {
+        if (i>1) author = author " ";
+        author = author $i;
+        }
+        
+        # Filter out unwanted branches
+        if (branch !~ /^origin\/(FRB_release|release|HEAD|develop|master)/) {
+        # Remove the "origin/" prefix
+        branch = substr(branch, 8);
+        authors[author]++;
+        if (branches[author] == "") {
+            branches[author] = branch;
+        } else {
+            branches[author] = branches[author] ", " branch;
+        }
+        }
+    }
+    END {
+        for (author in authors)
+        print authors[author] "###" author "###" branches[author];
+    }' | \
+    sort -nr | \
+    sed "s/\(^[0-9]*\)###\(.*\)###\(.*\)/\x1b[1;32m\1\x1b[0m \x1b[36m\2\x1b[0m \x1b[33m\3\x1b[0m/"
+}
+
+remove_branches() {
+    # Check if at least one branch name is provided
+    if [ -z "$1" ]; then
+    echo "Usage: $0 <comma-delimited-branch-names>"
+    exit 1
+    fi
+
+    # Convert the comma-delimited list to an array
+    IFS=',' read -ra BRANCHES <<< "$1"
+
+    # Loop through each branch and delete it from the remote
+    for branch in "${BRANCHES[@]}"; do
+    branch=$(echo "$branch" | xargs)  # Trim any leading/trailing whitespace
+    echo "Removing branch '$branch' from remote..."
+    git push origin --delete "$branch"
+    done
+
+    echo "Done."
+}
+
+# Linearize by rebasing all descendants of a parent commit in chronological order (jj only)
+jjlinearize() {
+    if [ $# -eq 0 ]; then
+        echo "Usage: jj_linearize <parent-change-id>"
+        echo "Example: jj_linearize nowzuvwo"
+        return 1
+    fi
+
+    PARENT_CHANGE_ID="$1"
+
+    echo "Linearizing descendants of: $PARENT_CHANGE_ID"
+
+    # Get ALL descendants - use default format then extract change IDs
+    DESCENDANTS_OUTPUT=$(jj log -r "descendants($PARENT_CHANGE_ID) & ~$PARENT_CHANGE_ID" --reversed --no-graph)
+    
+    # Extract change IDs from the output (they're at the beginning of each line)
+    CHILDREN_ARRAY=($(echo "$DESCENDANTS_OUTPUT" | grep -o '^[a-z0-9]\{8\}' | head -20))
+
+    if [ ${#CHILDREN_ARRAY[@]} -eq 0 ]; then
+        echo "No descendants found for change: $PARENT_CHANGE_ID"
+        return 0
+    fi
+
+    # Show what we found
+    echo "Found ${#CHILDREN_ARRAY[@]} descendants:"
+    for change_id in "${CHILDREN_ARRAY[@]}"; do
+        if [ -n "$change_id" ]; then
+            desc=$(jj log -r "$change_id" --no-graph -T 'description.first_line()')
+            echo "✏️ $change_id: $desc"
+        fi
+    done
+
+    # If only one descendant, nothing to linearize
+    if [ ${#CHILDREN_ARRAY[@]} -eq 1 ]; then
+        echo "Only one descendant found - nothing to linearize"
+        return 0
+    fi
+
+    # Rebase the first descendant to the parent
+    FIRST_CHANGE_ID="${CHILDREN_ARRAY[1]}"
+    jj rebase -s "$FIRST_CHANGE_ID" -d "$PARENT_CHANGE_ID"
+    PREVIOUS_CHANGE_ID="$FIRST_CHANGE_ID"
+
+    # Rebase each subsequent descendant to the previous one
+    for i in $(seq 2 ${#CHILDREN_ARRAY[@]}); do
+        CURRENT_CHANGE_ID="${CHILDREN_ARRAY[$i]}"
+        jj rebase -s "$CURRENT_CHANGE_ID" -d "$PREVIOUS_CHANGE_ID"
+        PREVIOUS_CHANGE_ID="$CURRENT_CHANGE_ID"
+    done
+
+    echo "Linearization complete! Final order:"
+    jj log -r "$PARENT_CHANGE_ID::" --limit 10
+}
+
+watchlog() {
+    hwatch --color jj --ignore-working-copy log --color=always
 }
 
 ##### GIT SHORTCUTS #####
@@ -293,7 +545,7 @@ alias ocnry="cd ~/code/tecton-canary && code ."
 alias cdng="cd ~/code/ngam"
 
 # opens NGAM in VSCode
-alias ongam='cd ~/code/ngam && code .'
+alias ong='cd ~/code/ngam && code .'
 
 # starts the nginx server and builds ngam
 alias snginx="nginx_smart_start"
@@ -304,13 +556,13 @@ alias enginx="code /opt/homebrew/etc/nginx/nginx.conf"
 
 ##### ANTILLES/SDK #####
 # navigate to Antilles root
-alias cdant="cd ~/code/antilles"
+alias cdant="cd ~/code/antilles && sant"
 
 # opens Antilles repo in VSCode
 alias oant="cd ~/code/antilles && code ."
 
 # navigate to SDK root
-alias cdsdk="cd ~/code/sdk"
+alias cdsdk="cd ~/code/sdk && ssdk"
 
 # opens SDK repo in VSCode
 alias osdk="cd ~/code/sdk && code ."
@@ -320,6 +572,13 @@ alias ssdk="source ~/.antilles/sdk_env_vars.sh && source ~/.antilles/antilles_co
 
 # runs the necessary scripts to start the Antilles environment inside antilles repos
 alias sant="source ~/.antilles/sdk_env_vars.sh && source ~/.antilles/antilles_completion.zsh && source ~/code/antilles/.venv/bin/activate"
+
+
+# link q2-tecton-sdk to all frontend projects in SDK directory
+alias sdklink="link_tecton_sdk link"
+
+# unlink q2-tecton-sdk from all frontend projects in SDK directory
+alias sdkunlink="link_tecton_sdk unlink"
 
 # runs the review-buddy tool
 alias rb="cd ~/code/review-buddy && cargo run $1"
