@@ -17,6 +17,13 @@ NC='\033[0m'
 
 autoload -U add-zsh-hook
 
+# pnpm setup
+export PNPM_HOME="/Users/jpoirier/Library/pnpm"
+case ":$PATH:" in
+  *":$PNPM_HOME:"*) ;;
+  *) export PATH="$PNPM_HOME:$PATH" ;;
+esac
+
 
 ##### PYTHON HELPERS ##### 
 for cmd in pyenv python python3 pip pip3; do
@@ -30,7 +37,7 @@ done
 # Check for .python-version files
 load_pyenv() {
     local dir="$(pwd -P)"
-    
+
     while [[ "$dir" != "/" ]]; do
         if [[ -f "$dir/.python-version" ]]; then
             unset -f pyenv python pip python3 pip3
@@ -40,7 +47,6 @@ load_pyenv() {
         dir="$(dirname "$dir")"
     done
 }
-
 
 ##### HELPERS #####
 
@@ -66,8 +72,8 @@ gpu() {
       [[ $current_branch =~ ^release/[0-9]+\.[0-9]+\.?[0-9]*[x]?$ ]]; then
        git push --set-upstream origin $current_branch
    else
-       echo "Warning: Branch '$current_branch' doesn't match standard patterns."
-       echo "Manually push with git push --set-upstream origin $current_branch"
+       echo "⚠️ ${YELLOW} Warning: Branch '$current_branch' doesn't match standard patterns. ${NC}"
+       echo "${YELLOW} Manually push with git push --set-upstream origin $current_branch"
    fi
 }
 
@@ -83,7 +89,7 @@ apply_styleguide() {
     if [[ -z "$file" ]]; then
         pushd ~/code/tecton/packages/q2-tecton-elements >/dev/null
         trap 'popd >/dev/null; trap - INT' EXIT INT
-        yarn style:fix
+        pnpm style:fix
         return
     fi
     
@@ -98,7 +104,7 @@ apply_styleguide() {
     
     pushd ~/code/tecton/packages/q2-tecton-elements >/dev/null
     trap 'popd >/dev/null; trap - INT' EXIT INT
-    yarn style:fix --path "src/components/${basename}/${file}"
+    pnpm style:fix --path "src/components/${basename}/${file}"
 }
 
 # starts the Tecton test suite
@@ -106,9 +112,9 @@ stests() {
     pushd ~/code/tecton/packages/q2-tecton-elements >/dev/null
     trap 'popd >/dev/null; trap - INT' EXIT INT
     if [[ "$1" == "-v" ]]; then
-        yarn test:dev
+        pnpm test:dev
     else
-        yarn test:dev --silent
+        pnpm test:dev --silent
     fi
 }
 
@@ -116,8 +122,8 @@ stests() {
 sdocs() {
     pushd ~/code/tecton/packages/docs >/dev/null
     trap 'popd >/dev/null; trap - INT' EXIT INT
-    yarn clean
-    yarn start
+    pnpm clean
+    pnpm start
 }
 
 update_dot_file() {
@@ -128,157 +134,140 @@ update_dot_file() {
     git commit -m 'updated zshrc'
     git push
     source ~/.zshrc
-    echo -e "${GREEN}${CHECK_ICON} dot_file repo updated ${NC}"
+    echo -e "✅ ${GREEN} dot_file repo updated ${NC}"
 }
 
 link_tecton_sdk(){
     local command="$1"
-    
+
     # Validate that a command was provided
     if [[ -z "$command" ]]; then
         echo -e "${YELLOW} ❌ No command specified. Use sdklink or sdkunlink aliases. ${NC}"
         return 1
     fi
-    
+
     # Validate command
     if [[ "$command" != "link" && "$command" != "unlink" ]]; then
         echo -e "${YELLOW} ❌ Invalid command: $command. Use 'link' or 'unlink'. ${NC}"
         return 1
     fi
-    
+
+    # Register packages globally if linking
+    if [[ "$command" == "link" ]]; then
+        register_tecton_packages
+    fi
+
     # Set up variables based on command
-    local action_verb action_past_tense yarn_command
+    local action_verb action_past_tense pnpm_command
     if [[ "$command" == "link" ]]; then
         action_verb="Linking"
         action_past_tense="linked"
-        yarn_command="yarn link q2-tecton-sdk"
+        pnpm_command="pnpm link q2-tecton-sdk"
     else
         action_verb="Unlinking"
         action_past_tense="unlinked"
-        yarn_command="yarn unlink q2-tecton-sdk"
+        pnpm_command="pnpm unlink q2-tecton-sdk"
     fi
-    
-    echo -e "${GREEN}${CHECK_ICON} Starting SDK ${command}ing process... ${NC}"
-    
+
+    echo -e "✅ ${GREEN} Starting SDK ${command}ing process... ${NC}"
+
     # Change to the SDK directory
     if ! pushd ~/code/sdk >/dev/null 2>&1; then
         echo -e "${YELLOW} ❌ Error: Could not find ~/code/sdk directory ${NC}"
         return 1
     fi
-    
+
     # Set up trap to ensure we always return to original directory
     trap 'popd >/dev/null 2>&1; trap - INT' EXIT INT
-    
-    echo -e "${GREEN}${CHECK_ICON} Searching for projects with frontend folders... ${NC}"
-    
+
+    echo -e "✅ ${GREEN} Searching for projects with frontend folders... ${NC}"
+
     local processed_count=0
-    
+
     # Iterate through all directories in the current location
     for dir in */; do
         # Remove trailing slash from directory name
         dir_name="${dir%/}"
-        
+
         # Skip if not a directory
         if [[ ! -d "$dir_name" ]]; then
             continue
         fi
-        
+
         # Check if this directory has a frontend folder
         if [[ -d "$dir_name/frontend" ]]; then
             echo -e "${YELLOW} Found frontend in: $dir_name ${NC}"
-            
+
             # Check if frontend directory has a package.json file
             if [[ ! -f "$dir_name/frontend/package.json" ]]; then
-                echo -e "${YELLOW}   ❌ No package.json found in $dir_name/frontend, skipping... ${NC}"
+                echo -e "${YELLOW} ❌ No package.json found in $dir_name/frontend, skipping... ${NC}"
                 continue
             fi
-            
-            # Change to the frontend directory and run yarn command
+
+            # Change to the frontend directory and run pnpm command
             if pushd "$dir_name/frontend" >/dev/null 2>&1; then
                 echo -e "${GREEN}   ${action_verb} q2-tecton-sdk in $dir_name/frontend... ${NC}"
-                
-                if eval "$yarn_command" 2>/dev/null; then
+
+                if eval "$pnpm_command" 2>/dev/null; then
                     echo -e "${GREEN}   ${CHECK_ICON} Successfully ${action_past_tense} q2-tecton-sdk ${NC}"
                     ((processed_count++))
                 else
-                    echo -e "${YELLOW}   ❌ Failed to ${command} q2-tecton-sdk in $dir_name/frontend ${NC}"
+                    echo -e "${YELLOW} ❌ Failed to ${command} q2-tecton-sdk in $dir_name/frontend ${NC}"
                 fi
-                
+
                 # Return to the SDK root directory
                 popd >/dev/null
             else
-                echo -e "${YELLOW}   ❌ Could not access $dir_name/frontend directory ${NC}"
+                echo -e "${YELLOW} ❌ Could not access $dir_name/frontend directory ${NC}"
             fi
         fi
     done
-    
+
     if [[ $processed_count -eq 0 ]]; then
-        echo -e "${YELLOW} No projects with frontend folders found to ${command} ${NC}"
+        echo -e "⚠️ ${YELLOW} No projects with frontend folders found to ${command} ${NC}"
     else
         # Capitalize first letter of action_past_tense (zsh compatible)
         local capitalized_action="${(C)action_past_tense}"
-        echo -e "${GREEN}${CHECK_ICON} SDK ${command}ing completed! ${capitalized_action} q2-tecton-sdk to $processed_count project(s) ${NC}"
+        echo -e "✅ ${GREEN} SDK ${command}ing completed! ${capitalized_action} q2-tecton-sdk to $processed_count project(s) ${NC}"
     fi
 }
 
-# Link Tecton packages to NGAM and start Tecton local server in HTTPS
-voltron() {
-    pushd ~/code/tecton/packages/q2-tecton-sdk >/dev/null
-    trap 'popd >/dev/null 2>&1; cd ~/code/tecton; trap - INT' EXIT INT
-    echo -e "${GREEN}${CHECK_ICON} READY TO FORM VOLTRON! ${NC}"
-    yarn link
-    popd >/dev/null
-    echo -e "${GREEN}${CHECK_ICON} ACTIVATE INTERLOCKS! ${NC}"
+# Register Tecton packages via PNPM
+register_tecton_packages() {
+    local packages=("q2-tecton-sdk" "q2-tecton-platform")
+    local tecton_root=~/code/tecton/packages
 
-    pushd ~/code/tecton/packages/q2-tecton-platform >/dev/null
-    yarn link
-    popd >/dev/null
-    echo -e "${GREEN}${CHECK_ICON} DYNATHERMS CONNECTED! ${NC}"
+    for package in "${packages[@]}"; do
+        pushd "$tecton_root/$package" >/dev/null
+        pnpm link
+        popd >/dev/null
+    done
+}
 
-    pushd ~/code/ngam/packages/q2-uux >/dev/null
-    yarn link q2-tecton-sdk
-    echo -e "${GREEN}${CHECK_ICON} INFRA-CELLS UP! ${NC}"
-    yarn link q2-tecton-platform
-    echo -e "${GREEN}${CHECK_ICON} MEGA-THRUSTERS ARE A GO! ${NC}"
-    popd >/dev/null
-
+# Link Tecton, check SSL certificates, and start Tecton local server in HTTPS
+pblh() {
     cd ~/code/tecton
+
+    register_tecton_packages
+
     # Check for SSL certificates and copy over if necessary
     if [[ ! -f "localhost.crt" ]] || [[ ! -f "localhost.key" ]]; then
-        echo -e "${YELLOW} SSL certificates not found in $(pwd). Attempting to copy from home directory... ${NC}"
+        echo -e "⚠️ ${YELLOW} SSL certificates not found in $(pwd). Attempting to copy from home directory... ${NC}"
         if [[ -f ~/localhost.crt ]] && [[ -f ~/localhost.key ]]; then
             cp ~/localhost.{crt,key} .
-            echo -e "${GREEN}${CHECK_ICON} SSL certificates copied successfully. ${NC}"
+            echo -e "✅ ${GREEN} SSL certificates copied successfully. ${NC}"
         else
-            echo -e "${YELLOW} Warning: SSL certificates not found in home directory. HTTPS may not work correctly. ${NC}"
+            echo -e "⚠️ ${YELLOW} Warning: SSL certificates not found in home directory. HTTPS may not work correctly. ${NC}"
         fi
     fi
-    echo -e "${GREEN}${CHECK_ICON} LET'S GO VOLTRON FORCE! ${NC}"
-    yarn build:local:https
-}
 
-# Unlink Tecton packages from NGAM and reinstall base dependencies
-unlink() {
-    pushd ~/code/tecton/packages/q2-tecton-sdk >/dev/null
-    trap 'popd >/dev/null 2>&1; cd ~/code/tecton; trap - INT' EXIT INT
-    # Unlink Tecton packages
-    yarn unlink
-    popd >/dev/null
-    pushd ~/code/tecton/packages/q2-tecton-platform >/dev/null
-    yarn unlink
-    popd >/dev/null
-    # Unlink in NGAM and reinstall dependencies
-    pushd ~/code/ngam/packages/q2-uux >/dev/null
-    yarn unlink q2-tecton-sdk
-    yarn unlink q2-tecton-platform
-    echo -e "${GREEN} Clean Installing NGAM dependencies... ${NC}"
-    yarn nom
-    yarn install
+    echo -e "✅ ${GREEN} Building Tecton with HTTPS protocol ${NC}"
+    pnpm build:local:https
 }
 
 safe-rm() {
     if ! command -v trash &> /dev/null; then
-    echo "Warning: 'trash' command not found. Please install it with 'brew install trash'"
+    echo "⚠️ ${YELLOW} Warning: 'trash' command not found. Please install it with 'brew install trash'"
     exit 1
     fi
     # Extract all arguments that aren't flags (starting with -)
@@ -299,8 +288,8 @@ safe-rm() {
     fi
 }
 
-nginx_smart_start() {
-    cd ~/code/ngam
+snginx() {
+    cd ~/code/uux
     # Use ps to search for nginx master process and capture the output
     # grep -v 'grep' excludes the grep process itself from results
     nginx_process=$(ps aux | grep "nginx: master" | grep -v grep)
@@ -309,7 +298,7 @@ nginx_smart_start() {
         # If the $nginx_process string is empty (no nginx master found)
         echo "${YELLOW} Nginx is not running. Starting Nginx... ${NC}"
         sudo nginx
-        echo "${GREEN}${CHECK_ICON} Nginx is now running. ${NC}"
+        echo "✅ ${GREEN} Nginx is now running. ${NC}"
     else
         # If we found a master process, ask if user wants to reload
         echo "${YELLOW} Nginx is already running. Reload nginx config? (y/N): ${NC}"
@@ -319,13 +308,39 @@ nginx_smart_start() {
         if [[ "$reload_choice" =~ ^[Yy]$ ]]; then
             echo "${YELLOW} Enter password to reload nginx config... ${NC}"
             sudo nginx -s reload
-            echo "${GREEN}${CHECK_ICON} Nginx config reloaded. ${NC}"
+            echo "✅ ${GREEN} Nginx config reloaded. ${NC}"
         else
-            echo "${GREEN}${CHECK_ICON} Skipping nginx reload. ${NC}"
+            echo "✅ ${GREEN} Skipping nginx reload. ${NC}"
         fi
     fi
-    echo "${GREEN}${CHECK_ICON} Starting the NGAM local server... ${NC}"
-    yarn start
+
+    # Prompt to skip linking to Tecton packages
+    echo "${YELLOW} Skip linking Tecton local packages to UUX? (y/N): ${NC}"
+    read -r link_choice
+    link_choice=${link_choice:-N}
+    if [[ "$link_choice" =~ ^[Nn]$ ]]; then
+        echo "${YELLOW} Linking ${GREEN} q2-tecton-sdk ${YELLOW} and ${GREEN} q2-tecton-platform ${YELLOW}to UUX... ${NC}"
+        pushd ~/code/uux/packages/q2-uux >/dev/null
+        pnpm link q2-tecton-sdk q2-tecton-platform
+        pnpm link q2-tecton-sdk q2-tecton-platform
+        popd >/dev/null
+        echo "✅ ${GREEN} Tecton local packages linked to UUX. ${NC}"
+    else
+        echo "${GREEN} Skipping Tecton package linking. ${NC}"
+    fi
+
+    echo "${GREEN} Starting the UUX local server... ${NC}"
+    pnpm start
+}
+
+unlink_uux() {
+    pushd ~/code/uux >/dev/null
+    echo "${YELLOW} Unlinking ${GREEN}q2-tecton-sdk ${YELLOW}and ${GREEN}q2-tecton-platform ${YELLOW}from UUX... ${NC}"
+    pnpm remove q2-tecton-sdk q2-tecton-platform
+    pnpm unlink q2-tecton-sdk q2-tecton-platform
+    echo "✅ ${GREEN} Tecton local packages unlinked from UUX.${NC}"
+    echo "⚠️ ${YELLOW} You MUST remove the pnpm.overrides section from the root level package.json and manually run pnpm install again.${NC}"
+    popd >/dev/null
 }
 
 link_antilles() {
@@ -336,7 +351,7 @@ link_antilles() {
     local q2_sdk_info=$(pip show q2-sdk 2>/dev/null)
     
     if [[ -z "$q2_sdk_info" ]]; then
-        echo "${YELLOW} ❌ q2-sdk is not installed in the repo. Be sure you ran 'pip install -r requirements.txt' ${NC}"
+        echo "❌ ${YELLOW} q2-sdk is not installed in the repo. Be sure you ran 'pip install -r requirements.txt' ${NC}"
         return 1
     fi
     
@@ -346,14 +361,14 @@ link_antilles() {
     if [[ -n "$editable_project" ]]; then
         # Check if it points to our local antilles/sdk
         if [[ "$editable_project" == *"/code/antilles/sdk"* ]]; then
-            echo "${GREEN}${CHECK_ICON} Antilles is correctly linked for local SDK development! ${NC}"
+            echo "✅ ${GREEN} Antilles is correctly linked for local SDK development! ${NC}"
         else
-            echo "${YELLOW} ❌ Unexpected location for local Antilles repo: $editable_project ${NC}"
-            echo "${YELLOW}   Expected: */code/antilles/sdk ${NC}"
+            echo "❌ ${YELLOW} Unexpected location for local Antilles repo: $editable_project ${NC}"
+            echo "${YELLOW} Expected: ~/code/antilles/sdk ${NC}"
             return 1
         fi
     else
-        echo "${YELLOW} ❌ Antilles is not linked for local development ${NC}"
+        echo "⚠️ ${YELLOW} Antilles is not linked for local development ${NC}"
         return 1
     fi
 }
@@ -487,7 +502,7 @@ jjlinearize() {
         PREVIOUS_CHANGE_ID="$CURRENT_CHANGE_ID"
     done
 
-    echo "Linearization complete! Final order:"
+    echo "✅ ${GREEN} Linearization complete! Final order:${NC}"
     jj log -r "$PARENT_CHANGE_ID::" --limit 10
 }
 
@@ -520,16 +535,15 @@ alias cdt="cd ~/code/tecton"
 alias otct="cd ~/code/tecton && code ."
 
 # builds the Tecton packages
-alias ybd="cd ~/code/tecton && yarn build:dev"
+alias pbd="cd ~/code/tecton && pnpm build:dev"
 
 # starts a local dev server of Tecton packages
-alias ybl="cd ~/code/tecton && yarn build:local"
+alias pbl="cd ~/code/tecton && pnpm build:local"
 
-# starts a local dev server of Tecton packages in HTTPS
-alias yblh="cd ~/code/tecton && yarn build:local:https"
+
 
 # runs linter on tecton packages
-alias format="cd ~/code/tecton && yarn lint:fix"
+alias format="cd ~/code/tecton && pnpm lint:fix"
 
 alias styleguide="apply_styleguide"
 
@@ -540,15 +554,12 @@ alias cdcn="cd ~/code/tecton-canary"
 alias ocnry="cd ~/code/tecton-canary && code ."
 
 
-##### NGAM #####
-# navigate to ngam root
-alias cdng="cd ~/code/ngam"
+##### UUX #####
+# navigate to uux root
+alias cdux="cd ~/code/uux"
 
-# opens NGAM in VSCode
-alias ong='cd ~/code/ngam && code .'
-
-# starts the nginx server and builds ngam
-alias snginx="nginx_smart_start"
+# opens UUX in VSCode
+alias oux='cd ~/code/uux && code .'
 
 # opens the nginx conf file for editing
 alias enginx="code /opt/homebrew/etc/nginx/nginx.conf"
@@ -559,13 +570,13 @@ alias enginx="code /opt/homebrew/etc/nginx/nginx.conf"
 alias cdant="cd ~/code/antilles && sant"
 
 # opens Antilles repo in VSCode
-alias oant="cd ~/code/antilles && code ."
+alias oant="cd ~/code/antilles && sant && code ."
 
 # navigate to SDK root
 alias cdsdk="cd ~/code/sdk && ssdk"
 
 # opens SDK repo in VSCode
-alias osdk="cd ~/code/sdk && code ."
+alias osdk="cd ~/code/sdk && ssdk && code ."
 
 # runs the necessary scripts to start the SDK environment inside sdk repos
 alias ssdk="source ~/.antilles/sdk_env_vars.sh && source ~/.antilles/antilles_completion.zsh && source .env/bin/activate"
@@ -587,6 +598,7 @@ alias rb="cd ~/code/review-buddy && cargo run $1"
 ##### OTHER #####
 # intercept rm commands to use trash from homebrew
 alias rm="safe-rm"
+
 # edit zshrc file
 alias ezsh="code ~/.zshrc"
 
